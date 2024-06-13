@@ -1,0 +1,349 @@
+#define USE_WIFI_NINA         false
+#define USE_WIFI101           true
+#include <WiFiWebServer.h>
+#include <Servo.h>
+
+const char ssid[] = "Test3";
+const char pass[] = "12345678";
+const int groupNumber = 0; // Set your group number to make the IP address constant - only do this on the EEERover network
+const int rightDir = 11;
+const int rightEn = 9;
+const int rightSpeed = 240;
+const int leftDir = 6;
+const int leftEn = 4;
+const int leftSpeed = 255;
+const int servoRight = 2;
+const int servoLeft = 3;
+const int commandRunTime = 2000, forwardState = 1, backwardState = 2, leftState = 3, rightState = 4, stopState = 0;
+int backgroundMagnetic = 530;
+unsigned long lastCommandTime;
+bool MOVING;
+String ultrasoundName;
+bool servoEn, servoDir;
+
+Servo Servo_right;
+Servo Servo_left;
+
+WiFiWebServer server(80);
+
+void handleRoot() {
+  String message = F("Control your robot using the HTML page hosted on your computer.");
+  server.send(200, F("text/plain"), message);
+}
+
+void goForward() {
+  analogWrite(leftEn, leftSpeed);
+  analogWrite(rightEn, rightSpeed);
+  digitalWrite(leftDir, 1);
+  digitalWrite(rightDir, 1);
+  
+  Serial.println("Going Forward");
+  MOVING = 1;
+  lastCommandTime = millis();
+}
+
+void goBackward() {
+  analogWrite(leftEn, leftSpeed);
+  analogWrite(rightEn, rightSpeed);
+  digitalWrite(leftDir, 0);
+  digitalWrite(rightDir, 0);
+  Serial.println("Going Backwards");
+  MOVING = 1;
+  lastCommandTime = millis();
+}
+
+void turnLeft() {
+  analogWrite(leftEn, leftSpeed);
+  analogWrite(rightEn, rightSpeed);
+  digitalWrite(leftDir, 0);
+  digitalWrite(rightDir, 1);
+  Serial.println("Turning Left");
+  MOVING = 1;
+  lastCommandTime = millis();
+}
+
+void turnSlowLeft() {
+  analogWrite(leftEn, 120);
+  analogWrite(rightEn, 120);
+  digitalWrite(leftDir, 0);
+  digitalWrite(rightDir, 1);
+  Serial.println("Turning Left");
+  MOVING = 1;
+  lastCommandTime = millis();
+}
+
+
+void turnRight() {
+  analogWrite(leftEn, leftSpeed);
+  analogWrite(rightEn, rightSpeed);
+  digitalWrite(leftDir, 1);
+  digitalWrite(rightDir, 0);
+  Serial.println("Turning Right");
+  MOVING = 1;
+  lastCommandTime = millis();
+}
+
+void turnSlowRight() {
+  analogWrite(leftEn, 120);
+  analogWrite(rightEn, 120);
+  digitalWrite(leftDir, 1);
+  digitalWrite(rightDir, 0);
+  Serial.println("Turning Right");
+  MOVING = 1;
+  lastCommandTime = millis();
+}
+
+void stop() {
+  analogWrite(leftEn, 0);
+  analogWrite(rightEn, 0);
+  Serial.println("Stop");
+  MOVING = 0;
+  lastCommandTime = millis();
+}
+
+void autoStop(){
+  if(MOVING && millis()-lastCommandTime > 5000){
+    stop();
+  }
+}
+
+void servoUp(){
+  Servo_left.write(Servo_left.read()-10);
+  Servo_right.write(Servo_right.read()+10);
+  Serial.println("Servo Up");
+}
+
+void servoDown(){
+  Servo_left.write(Servo_left.read()+10);
+  Servo_right.write(Servo_right.read()-10);
+  Serial.println("Servo Down");
+}
+
+int getFrequency(int pulsePin, int threshold, int timeLimit){
+  unsigned long timer = millis();
+  unsigned long startTime, highTime, lowTime;
+  while (analogRead(pulsePin) >= threshold) {
+    //waiting for the pulse reaching to the threshold
+    if(millis()-timer >= timeLimit){
+      return 0;
+    }
+  }
+  while (analogRead(pulsePin) < threshold) {
+    //waiting for the pulse reaching to the threshold
+    if(millis()-timer >= timeLimit){
+      return 0;
+    }
+  }
+  startTime = micros();
+  while (analogRead(pulsePin) >= threshold) {
+    // waiting for the pulse below the threshold
+    if(millis()-timer >= timeLimit){
+      return 0;
+    }
+  }
+  highTime = micros() - startTime;
+  startTime = micros();
+  while (analogRead(pulsePin) < threshold) {
+    if(millis()-timer >= timeLimit){
+      return 0;
+    }
+  }
+  lowTime = micros() - startTime;
+
+  unsigned long period = highTime + lowTime;
+  float frequency = 0;
+  if (period > 0) {
+    frequency = 1000000.0 / period;
+  }
+  return frequency;
+}
+
+String readBits(int timeLimit, int inputPin){
+  unsigned long startTime = millis();
+  unsigned long lastReadTime;
+  int bitCount = 1;
+  String thisBit, totalBits;
+  while(analogRead(inputPin)>=800){
+    if(millis()-startTime >= timeLimit){
+      return "No Signal";
+    }
+  }
+  totalBits = "0";
+  delayMicroseconds(500);
+  lastReadTime = micros();
+  while(bitCount < 40 && millis()-startTime<timeLimit){
+    if(micros()-lastReadTime >= 1667){
+      if(analogRead(inputPin)>=800){
+        thisBit = "1";
+      }else{
+        thisBit = "0";
+      }
+      lastReadTime = micros();
+      totalBits = totalBits + thisBit;
+      bitCount++; 
+    }
+    if(bitCount == 10 && totalBits == "0000000000"){
+      return "No Signal";
+    }
+  }
+  return totalBits;
+}
+
+String convertBitsToUARTString(String bitString) {
+  String result;
+  if(bitString[0] != '0'){
+    return "Invalid / No Signal";
+  }
+  for(int i = 0; i<4; i++){
+    char character = 0;
+    for(int j = 1; j<9; j++){
+      if (bitString[i * 10 + j] == '1') {
+        character |= 1 << (7-(8-j));
+      }
+    }
+    result += character;
+  }
+  return result;
+}
+
+String getName(int inputPin, int timeLimit){
+  String bits = readBits(timeLimit, inputPin);
+  bits = readBits(timeLimit, inputPin);
+  String name = convertBitsToUARTString(bits);
+  return name;
+}
+
+String getMagnetic(int background, int threshold, int inputPin){
+  int sensorValue = analogRead(inputPin);
+  Serial.println(backgroundMagnetic);
+  Serial.println(sensorValue);
+  if(sensorValue > background + threshold){
+    return "north";
+  }else if(sensorValue < background - threshold){
+    return "south";
+  }else{
+    return "no signal";
+  }
+}
+
+
+void readUltrasound(){
+  String name = getName(A2, 300);
+  String message = "{\"id\":\"US\", \"text\": \""+name+"\"}";
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.send(200, F("text/plain"),message);
+  Serial.print(F("Message Sent: "));
+  Serial.println(message);
+}
+
+void readInfrared(){
+  int infraredFrequency = getFrequency(A3, 800, 10);
+  String message = "{\"id\":\"IR\", \"text\": \""+String(infraredFrequency)+"\"}";
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.send(200, F("text/plain"),message);
+  Serial.print(F("Message Sent: "));
+  Serial.println(message);
+}
+
+void readRadio(){
+  int radioFrequency = getFrequency(A4, 200, 20);
+  String message = "{\"id\":\"RF\", \"text\": \""+String(radioFrequency)+"\"}";
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.send(200, F("text/plain"),message);
+  Serial.print(F("Message Sent: "));
+  Serial.println(message);
+}
+
+void readMagnetic(){
+  String pole = getMagnetic(backgroundMagnetic, 30, A5);
+  String message = "{\"id\":\"MG\", \"text\": \""+pole+"\"}";
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.send(200, F("text/plain"),message);
+  Serial.print(F("Message Sent: "));
+  Serial.println(message);
+}
+
+
+void handleNotFound() {
+  String message = F("File Not Found\n\n");
+  message += F("URI: ");
+  message += server.uri();
+  message += F("\nMethod: ");
+  message += (server.method() == HTTP_GET) ? F("GET") : F("POST");
+  message += F("\nArguments: ");
+  message += server.args();
+  message += F("\n");
+  for (uint8_t i = 0; i < server.args(); i++) {
+      message += " " + server.argName(i) + ": " + server.arg(i) + "\n";
+    }
+  server.send(404, F("text/plain"), message);
+}
+
+
+void setup() {
+  pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(rightDir, OUTPUT);
+  pinMode(rightEn, OUTPUT);
+  pinMode(leftDir, OUTPUT);
+  pinMode(leftEn, OUTPUT);
+  digitalWrite(LED_BUILTIN, 0);
+  Servo_left.attach(servoRight);
+  Servo_right.attach(servoLeft);
+
+  Serial.begin(9600);
+
+  backgroundMagnetic = analogRead(A5);
+
+  // Wait 10s for the serial connection before proceeding
+  // This ensures you can see messages from setup() on the monitor
+  // Remove this for faster startup when the USB host isn't attached
+  while (!Serial && millis() < 10000);
+
+  Serial.println(F("\nStarting Web Server"));
+
+  // Check WiFi shield is present
+  if (WiFi.status() == WL_NO_SHIELD) {
+    Serial.println(F("WiFi shield not present"));
+    while (true);
+  }
+
+  // Configure static IP
+  if (groupNumber)
+    WiFi.config(IPAddress(192,168,0,groupNumber+1));
+
+  // Attempt to connect to WiFi network
+  Serial.print(F("Connecting to WPA SSID: "));
+  Serial.println(ssid);
+  while (WiFi.begin(ssid, pass) != WL_CONNECTED) {
+    delay(500);
+    Serial.print('.');
+  }
+
+  // Register the callbacks to respond to HTTP requests
+  server.on(F("/"), handleRoot);
+  server.on(F("/forward"), goForward);
+  server.on(F("/backward"), goBackward);
+  server.on(F("/stop"), stop);
+  server.on(F("/left"), turnLeft);
+  server.on(F("/slowleft"), turnSlowLeft);
+  server.on(F("/right"), turnRight);
+  server.on(F("/slowright"), turnSlowRight);
+  server.on(F("/getUS"), readUltrasound);
+  server.on(F("/getIR"), readInfrared);
+  server.on(F("/getRF"), readRadio);
+  server.on(F("/getMG"), readMagnetic);
+  server.on(F("/servoup"), servoUp);
+  server.on(F("/servodown"), servoDown);
+
+  server.onNotFound(handleNotFound);
+
+  server.begin();
+
+  Serial.print(F("HTTP server started @ "));
+  Serial.println(static_cast<IPAddress>(WiFi.localIP()));
+  
+}
+
+void loop() {
+  server.handleClient();
+}

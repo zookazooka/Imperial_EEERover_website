@@ -1,0 +1,274 @@
+<html><head><style>
+.btn {background-color: inherit;width: 100px;height: 100px;font-size: 16px;}
+.btn:hover {background: #eee;}
+.noselect {-webkit-user-select: none;-ms-user-select: none;user-select: none;}
+.spn {background-color: transparent;}
+table {width: 100%; border-collapse: collapse;}
+th, td {border: 1px solid black; padding: 8px; text-align: left;}
+body {
+    display: flex;
+    justify-content: center;
+    height: 100vh;
+    margin: 0;
+    font-family: Arial, sans-serif;
+}
+</style></head>
+<body>
+<div style =  "text-align:center ">
+    <form class = "ipt">
+        <input type = "text" name = "ip address" id = "IP" value = "192.168.212.22">
+        <input type = "submit" value = "Submit" onclick = "updateIP()">
+    </form>
+    IP address: <span id = "IP_text" class = "spn"></span><br><br>
+    <button class= "btn noselect " id = "buttonIR">Infrared</button>
+    <button class= "btn noselect " onmousedown= "forward() " onmouseup =  "stop() " ontouchstart= "forward() " ontouchend =  "stop() ">↑(w)</button>
+    <button class= "btn noselect " id = "buttonRF">Radio</button><br>
+    <button class= "btn noselect " onmousedown= "left() " onmouseup =  "stop()" ontouchstart= "left() " ontouchend =  "stop() ">←(a)</button>
+    <button class= "btn noselect " onclick =  "stop()">Stop</button>
+    <button class= "btn noselect " onmousedown= "right() " onmouseup =  "stop()" ontouchstart= "right() " ontouchend =  "stop() ">→(d)</button><br>
+    <button class= "btn noselect " id = "buttonMG">Magnetic</button>
+    <button class= "btn noselect " onmousedown= "backward() " onmouseup =  "stop()" ontouchstart= "backward() " ontouchend =  "stop() ">↓(s)</button>
+    <button class= "btn noselect " id = "buttonUS">Ultrasound</button><br>
+    <button class= "btn noselect " onclick = "servoUp()">ServoUp (↑)</button>
+    <button class= "btn noselect " onclick = "servoDown()">ServoDown (↓)</button><br>
+    <span id = "CS" class = "spn" >CarState: </span><br>
+    Ultrasound: <span id = "US" class = "spn" ></span><br>
+    Infrared: <span id = "IR" class = "spn" ></span><br>
+    Magnetic: <span id = "MG" class = "spn" ></span><br>
+    Radio: <span id = "RF" class = "spn" ></span><br><br>
+    <button class = "noselect" id = "buttonAddRow" onclick = "addRow()"> AddRow(Enter) </button>
+    <button class = "noselect" id = "buttonAddRow" onclick = "deleteLastRow()"> DeleteRow(Del) </button>
+    <button class = "noselect" id = "buttonAddRow" onclick = "stopReceive()"> StopReceive </button>
+    <table id="dataTable">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Infrared</th>
+                <th>Radio</th>
+                <th>Magnetic</th>
+                <th>Species</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
+</div>
+</body><script>
+url = "http://192.168.212.22/"
+var xhttp = new XMLHttpRequest();
+var wspressed = 0;
+var adpressed = 0;
+
+function updateCarState(value) {
+    document.getElementById("CS").innerHTML = "CarState: "+value;
+}
+function updateSignalStatus(id,value) {
+    if(id == "ALL"){
+        document.getElementById("US").innerHTML = value;
+        document.getElementById("IR").innerHTML = value;
+        document.getElementById("MG").innerHTML = value;
+        document.getElementById("RF").innerHTML = value;
+    }else{
+        document.getElementById(id).innerHTML = value;
+    }
+}
+function forward() {
+    xhttp.open( "POST",  url+"forward"); 
+    xhttp.send();
+    updateCarState("forward");
+}
+function left() {
+    xhttp.open( "POST",  url+"left");
+    xhttp.send();
+    updateCarState("left");
+}
+function right() {
+    xhttp.open( "POST",  url+"right");
+    xhttp.send();
+    updateCarState("right");
+}
+function slowLeft() {
+    xhttp.open( "POST",  url+"slowleft");
+    xhttp.send();
+    updateCarState("slowLeft");
+}
+function slowRight() {
+    xhttp.open( "POST",  url+"slowright");
+    xhttp.send();
+    updateCarState("slowRight");
+}
+function backward() {
+    xhttp.open( "POST", url+"backward",); 
+    xhttp.send();
+    updateCarState("backward");
+}
+function stop() {
+    xhttp.open("POST", url+"stop"); 
+    xhttp.send();
+    updateCarState("stop");
+}
+
+function servoUp(){
+    xhttp.open("POST", url+"servoup"); 
+    xhttp.send();
+    updateCarState("servoUp");
+}
+
+function servoDown() {
+    xhttp.open( "POST", url+"servodown",); 
+    xhttp.send();
+    updateCarState("servoDown");
+}
+
+function decodeResponse(){
+    if (xhttp.status == 200) {
+        var data = JSON.parse(this.responseText);
+        updateSignalStatus(data.id, data.text);
+    }
+}
+
+function receiveUltrasound() {
+    updateSignalStatus("US","Receiving US Signal");
+    xhttp.open('GET', url+"getUS", true);
+    xhttp.onload = decodeResponse;
+    xhttp.send();
+}
+
+function receiveMagnetic(){
+    updateSignalStatus("MG","Receiving Magnetic Signal");
+    xhttp.open('GET', url+"getMG", true);
+    xhttp.onload = decodeResponse;
+    xhttp.send();
+}
+
+function receiveInfrared(){
+    updateSignalStatus("IR","Receiving Infrared Signal");
+    xhttp.open('GET', url+"getIR", true);
+    xhttp.onload = decodeResponse;
+    xhttp.send();
+}
+
+function receiveRadio(){
+    updateSignalStatus("RF","Receiving Radio Signal");
+    xhttp.open('GET', url+"getRF", true);
+    xhttp.onload = decodeResponse;
+    xhttp.send();
+}
+
+document.getElementById('buttonUS').addEventListener('click', receiveUltrasound);
+document.getElementById('buttonIR').addEventListener('click', receiveInfrared);
+document.getElementById('buttonRF').addEventListener('click', receiveRadio);
+document.getElementById('buttonMG').addEventListener('click', receiveMagnetic);
+
+
+document.addEventListener("keydown", function(event){
+    if(event.key === "W" || event.key === "w"){
+        wspressed = 1;
+        forward();
+    }else if(event.key === "S" || event.key === "s"){
+        wspressed = 1;
+        backward();
+    }else if(event.key === "Q" || event.key === "q"){
+        wspressed = 0;
+        adpressed = 0;
+        stop();
+    }
+    if(!event.shiftKey){
+        if(event.key === "A" || event.key === "a"){
+            adpressed = 1;
+            left();
+        }else if(event.key === "D" || event.key === "d"){
+            adpressed = 1;
+            right();
+        }
+    }else{
+        if(event.key === "A" || event.key === "a"){
+            adpressed = 1;
+            slowLeft();
+        }else if(event.key === "D" || event.key === "d"){
+            adpressed = 1;
+            slowRight();
+        }
+    }
+    if(event.key === "ArrowUp"){
+        servoUp();
+    }else if(event.key === "ArrowDown"){
+        servoDown();
+    }else if(event.key === "Enter"){
+        addRow();
+    }else if(event.key === "Delete"){
+        deleteLastRow();
+    }
+});
+
+document.addEventListener("keyup",function(event){
+    if(event.key === "w" || event.key === "W"|| event.key === "s" || event.key === "S"){
+        wspressed = 0;
+        if(adpressed == 0){
+            stop();
+        }
+    }else if(event.key === "A" || event.key === "a"|| event.key === "D" || event.key === "d"){
+        adpressed = 0;
+        if(wspressed == 0){
+            stop();
+        }
+    }
+    if(event.key === "U" || event.key === "u"){
+        receiveUltrasound();
+    }else if(event.key === "R" || event.key === "r"){
+        receiveRadio();
+    }else if(event.key === "I" || event.key === "i"){
+        receiveInfrared();
+    }else if(event.key === "M" || event.key === "m"){
+        receiveMagnetic();
+    }
+});
+
+function addRow(){
+
+    var data = {
+        Name : document.getElementById("US").innerHTML,
+        Infrared : document.getElementById("IR").innerHTML,
+        Radio : document.getElementById("RF").innerHTML,
+        Magnetic : document.getElementById("MG").innerHTML,
+        Species: "New Species"
+    }
+
+    const table = document.getElementById('dataTable').getElementsByTagName('tbody')[0];
+    const newRow = table.insertRow();
+
+    const nameCell = newRow.insertCell(0);
+    const infraredCell = newRow.insertCell(1);
+    const radioCell = newRow.insertCell(2);
+    const magneticCell = newRow.insertCell(3);
+    const speciesCell = newRow.insertCell(4);
+
+    nameCell.textContent = data.Name;
+    infraredCell.textContent = data.Infrared;
+    radioCell.textContent = data.Radio;
+    magneticCell.textContent = data.Magnetic;
+    speciesCell.textContent = data.Species;
+}
+
+function deleteLastRow(){
+    const table = document.getElementById('dataTable').getElementsByTagName('tbody')[0];
+    const rowCount = table.rows.length;
+    if(rowCount > 0){
+        table.deleteRow(rowCount-1);
+    }
+}
+
+function stopReceive() {
+    xhttp.open("GET", url+"stopReceive"); 
+    xhttp.send();
+    updateSignalStatus("ALL", "Paused");
+}
+function updateIP(){
+    event.preventDefault();
+    var ip_address = document.getElementById("IP").value;
+    document.getElementById("IP").value = ip_address;
+    url = "http://"+ip_address+"/"; 
+    updateSignalStatus("IP_text",ip_address);
+    updateSignalStatus("IP", ip_address);
+}
+</script></html>
